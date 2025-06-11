@@ -31,16 +31,17 @@ const (
 
 // 任务定义
 type Task struct {
-	ID        int
-	Type      int
-	FucPath   string // Map或Reduce函数的共享库路径
-	Status    int
-	InputFile string // Map任务的输入文件
-	MapID     int
-	ReduceID  int
-	NReduce   int
-	NMap      int
-	MapFiles  []string // Reduce任务的输入文件（Map输出文件的列表）
+	ID          int
+	Type        int
+	FucPath     string // Map或Reduce函数的共享库路径
+	CombinePath string // Combine函数的共享库路径（如果有的话）
+	Status      int
+	InputFile   string // Map任务的输入文件
+	MapID       int
+	ReduceID    int
+	NReduce     int
+	NMap        int
+	MapFiles    []string // Reduce任务的输入文件（Map输出文件的列表）
 }
 
 // Master结构体
@@ -48,9 +49,10 @@ type Task struct {
 type Master struct {
 	mu sync.Mutex // 互斥锁，保护共享资源
 
-	mapPath    string
-	reducePath string
-	inputFiles []string
+	mapPath     string
+	reducePath  string
+	combinePath string
+	inputFiles  []string
 
 	nMap        int // Map任务的数量
 	nReduce     int // Reduce任务的数量
@@ -109,6 +111,7 @@ func NewMaster(nReduce int) *Master {
 		nReduce:     nReduce,
 		mapPath:     "",
 		reducePath:  "",
+		combinePath: "",
 		mapDone:     false,
 		reduceDone:  false,
 		workerCount: 0,
@@ -140,6 +143,16 @@ func (m *Master) SetPaths(args PathsArgs, reply *string) error {
 		fmt.Printf("Reduce函数共享库文件 %s 不存在", args.ReducePath)
 	} else {
 		m.reducePath = args.ReducePath
+	}
+	// 如果 Combine 函数路径不为空，检查其是否存在
+	if args.CombinePath != "" {
+		if _, err := os.Stat(args.CombinePath); os.IsNotExist(err) {
+			fmt.Printf("Combine函数共享库文件 %s 不存在", args.CombinePath)
+		} else {
+			m.combinePath = args.CombinePath
+		}
+	} else {
+		m.combinePath = "" // 如果没有提供 Combine 函数路径，则设置为空
 	}
 
 	// 检查输入目录是否存在
@@ -193,14 +206,15 @@ func (m *Master) initTasks() {
 	m.mapTasks = make([]Task, m.nMap) // 切片类型为Task，长度为nMap
 	for i := 0; i < m.nMap; i++ {
 		m.mapTasks[i] = Task{
-			ID:        i,
-			Type:      TaskTypeMap,
-			FucPath:   m.mapPath,
-			Status:    TaskStatusIdle, // 空闲状态
-			InputFile: m.inputFiles[i],
-			MapID:     i,
-			NReduce:   m.nReduce,
-			NMap:      m.nMap,
+			ID:          i,
+			Type:        TaskTypeMap,
+			FucPath:     m.mapPath,
+			CombinePath: m.combinePath,
+			Status:      TaskStatusIdle, // 空闲状态
+			InputFile:   m.inputFiles[i],
+			MapID:       i,
+			NReduce:     m.nReduce,
+			NMap:        m.nMap,
 		}
 	}
 

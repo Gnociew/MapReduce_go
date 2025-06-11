@@ -150,6 +150,41 @@ func (w *Worker) doMap(task Task) {
 		})
 	}
 
+	// 如果有 Combine 函数，则对中间结果进行合并
+	if task.CombinePath != "" {
+		// 加载Combine函数
+		combinePlugin, err := plugin.Open(task.CombinePath)
+		if err != nil {
+			log.Fatalf("无法加载Combine插件: %v", err)
+		}
+		combineSymbol, err := combinePlugin.Lookup("Combine")
+		if err != nil {
+			log.Fatalf("无法查找Combine函数: %v", err)
+		}
+		combineFunc := *(combineSymbol.(*Combine))
+		// 对每个 Reduce 任务的中间结果进行合并
+		for i := 0; i < task.NReduce; i++ {
+			// 将 []KeyValue 转换为 []*Pair
+			pairs := make([]*Pair, 0, len(intermediate[i]))
+			for _, kv := range intermediate[i] {
+				pairs = append(pairs, &Pair{
+					Key:   kv.Key,
+					Value: kv.Value,
+				})
+			}
+			// 使用 Combine 函数对中间结果进行合并
+			combined := combineFunc(pairs)
+			// 将合并后的结果重新赋值给 intermediate[i]
+			intermediate[i] = make([]KeyValue, 0, len(combined)) // 重新分配切片空间
+			for _, kv := range combined {
+				intermediate[i] = append(intermediate[i], KeyValue{
+					Key:   fmt.Sprintf("%v", kv.Key), // 将any类型转换为字符串
+					Value: kv.Value,
+				})
+			}
+		}
+	}
+
 	// currentDir, err := os.Getwd()
 	// if err != nil {
 	// 	log.Fatalf("无法获取当前工作目录: %v", err)

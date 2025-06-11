@@ -156,11 +156,12 @@ func runMapReduce() error {
 	return nil
 }
 
-func InputData(MapPath string, ReducePath string, data string) error {
+func InputData(MapPath string, ReducePath string, CombinePath string, data string) error {
 	args := mr.PathsArgs{
-		MapPath:    MapPath,    // Map函数的路径
-		ReducePath: ReducePath, // Reduce函数的路径
-		InputDir:   data,       // 输入文件路径
+		MapPath:     MapPath,     // Map函数的路径
+		ReducePath:  ReducePath,  // Reduce函数的路径
+		CombinePath: CombinePath, // Combine函数的路径
+		InputDir:    data,        // 输入文件路径
 	}
 
 	client, err := rpc.DialHTTP("tcp", "localhost:7777")
@@ -259,6 +260,7 @@ func main() {
 	mode := flag.String("mode", "", "Mode to run: start MapReduce or InputDir")
 	MapPath := flag.String("MapPath", "", "Map Function Path")
 	ReducePath := flag.String("ReducePath", "", "Reduce Function Path")
+	CombinePath := flag.String("CombinePath", "", "Combine Function Path")
 	data := flag.String("data", "", "Input Data Path")
 	flag.Parse()
 
@@ -269,11 +271,11 @@ func main() {
 		StartMapReduce() // 启动 MapReduce 分布式计算框架
 	}
 	if *mode == "InputDir" {
-		if *MapPath == "" || *ReducePath == "" || *data == "" {
-			log.Fatal("请指定 MapPath、ReducePath 和 data 参数")
+		if *MapPath == "" || *ReducePath == "" || *CombinePath == "" || *data == "" {
+			log.Fatal("请指定 MapPath、ReducePath、CombinePath 和 data 参数")
 		} else {
 			log.Println("开始设置输入数据...")
-			if err := InputData(*MapPath, *ReducePath, *data); err != nil {
+			if err := InputData(*MapPath, *ReducePath, *CombinePath, *data); err != nil {
 				log.Fatalf("设置输入数据失败: %v", err)
 			}
 			log.Println("输入数据设置完成")
