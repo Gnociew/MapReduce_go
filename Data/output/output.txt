@@ -1,0 +1,11 @@
+awesome	1
+big	1
+hello	3
+science	1
+world	1
+distributed	2
+fighting	1
+is	1
+systems	1
+data	2
+mapreduce	3
