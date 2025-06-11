@@ -1,8 +1,10 @@
 package mr
 
 import (
+	"bufio"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"net/rpc"
@@ -12,6 +14,9 @@ import (
 	"sync"
 	"time"
 )
+
+const linesPerFile = 5
+const input_temp = "Data/input_temp" // 拆分文件的临时目录
 
 // 任务状态
 const (
@@ -105,10 +110,10 @@ type HeartbeatReply struct {
 }
 
 // 创建一个新的Master
-func NewMaster(nReduce int) *Master {
+func NewMaster() *Master {
 	m := &Master{
 		nMap:        0,
-		nReduce:     nReduce,
+		nReduce:     0,
 		mapPath:     "",
 		reducePath:  "",
 		combinePath: "",
@@ -160,10 +165,16 @@ func (m *Master) SetPaths(args PathsArgs, reply *string) error {
 		fmt.Printf("输入目录 %s 不存在\n", args.InputDir)
 	}
 
+	// 拆分输入目录中的文件
+	if err := processFolder(args.InputDir, input_temp); err != nil {
+		fmt.Printf("处理输入目录 %s 时出错: %v\n", args.InputDir, err)
+		os.Exit(1)
+	}
+
 	// 获取输入目录中的所有文件
 	var inputFiles []string
 	/* filepath.Walk() 用于递归遍历输入目录中的所有文件 */
-	err := filepath.Walk(args.InputDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(input_temp, func(path string, info os.FileInfo, err error) error {
 		/* 这里的 err 是 filepath.Walk 在遍历文件时遇到错误时传递给回调函数的 */
 		if err != nil {
 			return err
@@ -180,13 +191,14 @@ func (m *Master) SetPaths(args PathsArgs, reply *string) error {
 	}
 
 	if len(inputFiles) == 0 {
-		fmt.Printf("输入目录 %s 中没有文件\n", args.InputDir)
+		fmt.Printf("输入目录 %s 中没有文件\n", input_temp)
 		os.Exit(1)
 	}
 
 	// 设置输入路径
 	m.inputFiles = inputFiles
 	m.nMap = len(inputFiles)
+	m.nReduce = int(math.Ceil(float64(m.nMap) / 2.0))
 
 	*reply = "路径设置成功"
 
@@ -454,4 +466,98 @@ func (m *Master) HealthCheck(args *struct{}, reply *string) error {
 		*reply = "Master 服务不可用"
 	}
 	return nil
+}
+
+func splitFileByLines(inputPath, outputDir string) error {
+	// 打开源文件
+	file, err := os.Open(inputPath)
+	if err != nil {
+		return fmt.Errorf("无法打开文件 %s: %v", inputPath, err)
+	}
+	defer file.Close()
+
+	// 获取文件信息
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("无法获取文件信息 %s: %v", inputPath, err)
+	}
+
+	// 获取文件名（不包括路径）
+	fileName := fileInfo.Name()
+	baseName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
+
+	// 创建输出文件夹
+	if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
+		return fmt.Errorf("无法创建输出目录 %s: %v", outputDir, err)
+	}
+
+	// 使用 bufio.Scanner 逐行读取文件
+	scanner := bufio.NewScanner(file)
+	lineCount := 0
+	fileIndex := 1
+	var outputFile *os.File
+	var writer *bufio.Writer
+
+	// 开始拆分文件
+	for scanner.Scan() {
+		// 如果文件已满5行，则创建新文件
+		if lineCount%linesPerFile == 0 {
+			// 如果存在旧的文件，需要关闭
+			if outputFile != nil {
+				writer.Flush()
+				outputFile.Close()
+			}
+
+			// 创建新的拆分文件
+			outputFileName := fmt.Sprintf("%s_%d%s", baseName, fileIndex, filepath.Ext(fileName))
+			outputFilePath := filepath.Join(outputDir, outputFileName)
+			outputFile, err = os.Create(outputFilePath)
+			if err != nil {
+				return fmt.Errorf("无法创建拆分文件 %s: %v", outputFilePath, err)
+			}
+			writer = bufio.NewWriter(outputFile)
+			fileIndex++
+		}
+
+		// 写入当前行
+		_, err := writer.WriteString(scanner.Text() + "\n")
+		if err != nil {
+			return fmt.Errorf("写入文件时出错 %s: %v", inputPath, err)
+		}
+
+		lineCount++
+	}
+
+	// 最后一个文件需要手动刷新并关闭
+	if outputFile != nil {
+		writer.Flush()
+		outputFile.Close()
+	}
+
+	// 检查是否有扫描错误
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("读取文件时出错 %s: %v", inputPath, err)
+	}
+
+	fmt.Printf("文件 %s 拆分成功\n", inputPath)
+	return nil
+}
+
+// 遍历文件夹并拆分每个文件
+func processFolder(inputFolder, outputFolder string) error {
+	err := filepath.Walk(inputFolder, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// 忽略文件夹，只处理文件
+		if !info.IsDir() {
+			err := splitFileByLines(path, outputFolder)
+			if err != nil {
+				fmt.Printf("处理文件 %s 时出错: %v\n", path, err)
+			}
+		}
+		return nil
+	})
+	return err
 }

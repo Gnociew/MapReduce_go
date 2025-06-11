@@ -3,3 +3,5 @@ hello mapreduce
 distributed systems
 mapreduce is awesome
 hello distributed mapreduce
+hello data science
+hello summer vacation

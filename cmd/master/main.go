@@ -14,15 +14,12 @@ func main() {
 
 	// 解析命令行参数
 	var port string
-	// var inputDir string
-	var nReduce int
 
 	flag.StringVar(&port, "port", ":7777", "Master服务监听端口")
-	flag.IntVar(&nReduce, "reduce", 3, "Reduce任务数量")
 	flag.Parse() // 解析命令行参数，覆盖默认值
 
 	// 创建 & 启动 Master
-	m := mr.NewMaster(nReduce)
+	m := mr.NewMaster()
 	// log.Println("222")
 	m.StartServer(port)
 	// log.Println("333")

@@ -65,7 +65,7 @@ func runMapReduce() error {
 		Run 方法会等待命令执行完成并返回结果，适用于需要等待命令执行完成的场景。
 	*/
 	// 子进程会继承父进程的工作目录
-	masterCmd := exec.Command("./compiled/master", "-port=:7777", "-reduce=3")
+	masterCmd := exec.Command("./compiled/master", "-port=:7777")
 
 	masterCmd.Stdout = os.Stdout
 	masterCmd.Stderr = os.Stderr
