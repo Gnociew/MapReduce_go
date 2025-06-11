@@ -37,14 +37,14 @@
         go run main.go -mode=InputDir -MapPath=./compiled/wordcount_mapper.so -ReducePath=./compiled/wordcount_reducer.so -CombinePath=./compiled/wordcount_combiner.so -data=./Data/input
         ```
 2. 运行自定义 mapreduce 任务
-- 实现 mr 包提供的 mapper、combiner 和 reducer 函数，将他们编译成 `.so` 文件
-- 编译 master 和 worker
-- 启动两个终端
-    - 终端 1 启动 master 和worker
-        ```
-        go run main.go -mode=MapReduce
-        ```
-    - 终端 2 输入 map、reduce、combine 函数和文件路径
-        ```
-        go run main.go -mode=InputDir -MapPath=... -ReducePath=... -CombinePath=... -data=...
-        ```
+    - 实现 mr 包提供的 mapper、combiner 和 reducer 函数，将他们编译成 `.so` 文件
+    - 编译 master 和 worker
+    - 启动两个终端
+        - 终端 1 启动 master 和worker
+            ```
+            go run main.go -mode=MapReduce
+            ```
+        - 终端 2 输入 map、reduce、combine 函数和文件路径
+            ```
+            go run main.go -mode=InputDir -MapPath=... -ReducePath=... -CombinePath=... -data=...
+            ```
