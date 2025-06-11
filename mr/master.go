@@ -37,6 +37,7 @@ const (
 // 任务定义
 type Task struct {
 	ID          int
+	WorkerID    string // 分配给哪个 Worker 的 ID
 	Type        int
 	FucPath     string // Map或Reduce函数的共享库路径
 	CombinePath string // Combine函数的共享库路径（如果有的话）
@@ -301,6 +302,7 @@ func (m *Master) AskTask(args *AskTaskArgs, reply *AskTaskReply) error {
 	if !m.mapDone {
 		for i := range m.mapTasks {
 			if m.mapTasks[i].Status == TaskStatusIdle {
+				m.mapTasks[i].WorkerID = args.WorkerID
 				m.mapTasks[i].Status = TaskStatusRunning
 				reply.Task = m.mapTasks[i]
 				return nil
@@ -331,6 +333,7 @@ func (m *Master) AskTask(args *AskTaskArgs, reply *AskTaskReply) error {
 		for i := range m.reduceTasks {
 			if m.reduceTasks[i].Status == TaskStatusIdle {
 				m.reduceTasks[i].Status = TaskStatusRunning
+				m.reduceTasks[i].WorkerID = args.WorkerID
 				reply.Task = m.reduceTasks[i]
 				return nil
 			}
@@ -378,7 +381,7 @@ func (m *Master) Heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 // 检查任务是否超时
 func (m *Master) checkTaskTimeout() {
 	for {
-		time.Sleep(10 * time.Second) // 每 10 秒检查一次
+		time.Sleep(1 * time.Second) // 每 10 秒检查一次
 
 		m.mu.Lock()
 
@@ -392,9 +395,14 @@ func (m *Master) checkTaskTimeout() {
 		for i := range m.mapTasks {
 			if m.mapTasks[i].Status == TaskStatusRunning {
 				// 检查此任务对应的Worker是否超时
-				// 由于实现简单，此处没有记录哪个 Worker 在执行哪个任务，在实际实现中应该记录任务分配情况
-				// 这里简单处理：如果有任务在运行状态超过一定时间，认为超时
-				m.mapTasks[i].Status = TaskStatusIdle
+				if lastHeartbeat, ok := m.heartbeats[m.mapTasks[i].WorkerID]; ok {
+					if time.Since(lastHeartbeat) > 30*time.Second { // 超过30秒未收到心跳
+						log.Printf("Map任务 %d 超时，分配给其他Worker\n", m.mapTasks[i].ID)
+						// 将任务状态设置为 Idle，重新分配给其他 Worker
+						m.mapTasks[i].Status = TaskStatusIdle
+						m.mapTasks[i].WorkerID = "" // 清除 Worker ID
+					}
+				}
 			}
 		}
 
@@ -402,12 +410,21 @@ func (m *Master) checkTaskTimeout() {
 		if m.mapDone {
 			for i := range m.reduceTasks {
 				if m.reduceTasks[i].Status == TaskStatusRunning {
-					m.reduceTasks[i].Status = TaskStatusIdle
+					// 检查此任务对应的Worker是否超时
+					if lastHeartbeat, ok := m.heartbeats[m.reduceTasks[i].WorkerID]; ok {
+						if time.Since(lastHeartbeat) > 30*time.Second { // 超过30秒未收到心跳
+							log.Printf("Reduce任务 %d 超时，分配给其他Worker\n", m.reduceTasks[i].ID)
+							// 将任务状态设置为 Idle，重新分配给其他 Worker
+							m.reduceTasks[i].Status = TaskStatusIdle
+							m.reduceTasks[i].WorkerID = "" // 清除 Worker ID
+						}
+					}
 				}
 			}
 		}
 
 		m.mu.Unlock()
+
 	}
 }
 

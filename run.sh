@@ -8,5 +8,3 @@ go build -o ./compiled/master ./cmd/master/main.go
 go build -o ./compiled/worker ./cmd/worker/main.go
 
 go run main.go -mode=MapReduce
-
-# 另起一个终端运行下方内容：
