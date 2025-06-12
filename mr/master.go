@@ -361,6 +361,41 @@ func (m *Master) FinishTask(args *FinishTaskArgs, reply *FinishTaskReply) error 
 	} else if task.Type == TaskTypeReduce {
 		if m.reduceTasks[task.ReduceID].Status == TaskStatusRunning {
 			m.reduceTasks[task.ReduceID].Status = TaskStatusComplete
+			if err := mergeOutput(); err != nil {
+				log.Fatalf("合并输出结果失败: %v", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// 合并输出结果
+func mergeOutput() error {
+	log.Println("合并Reduce输出...")
+
+	// 获取所有mr-out文件
+	matches, err := filepath.Glob("Data/mr-out/mr-out-*") // match：文件路径的切片
+	if err != nil {
+		return fmt.Errorf("查找输出文件失败: %v", err)
+	}
+
+	// 打开输出文件
+	outFile, err := os.Create("Data/output/output.txt")
+	if err != nil {
+		return fmt.Errorf("创建输出文件失败: %v", err)
+	}
+	defer outFile.Close()
+
+	// 合并所有中间输出
+	for _, file := range matches {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return fmt.Errorf("读取文件 %s 失败: %v", file, err)
+		}
+
+		if _, err := outFile.Write(data); err != nil {
+			return fmt.Errorf("写入合并输出失败: %v", err)
 		}
 	}
 
@@ -381,7 +416,7 @@ func (m *Master) Heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
 // 检查任务是否超时
 func (m *Master) checkTaskTimeout() {
 	for {
-		time.Sleep(1 * time.Second) // 每 10 秒检查一次
+		time.Sleep(3 * time.Second) // 每 3 秒检查一次
 
 		m.mu.Lock()
 

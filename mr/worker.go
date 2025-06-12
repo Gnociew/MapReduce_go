@@ -18,10 +18,11 @@ const tempFilePath = "Data/mr-temp"
 
 // Worker 结构定义
 type Worker struct {
-	ID         string
-	MapFunc    Map
-	ReduceFunc Reduce
-	masterAddr string
+	ID          string
+	MapFunc     Map
+	CombineFunc Combine
+	ReduceFunc  Reduce
+	masterAddr  string
 }
 
 // 中间结果的键值对
@@ -99,6 +100,7 @@ func (w *Worker) askForTask() Task {
 // 执行Map任务
 func (w *Worker) doMap(task Task) {
 	fmt.Printf("Worker %s 开始执行Map任务 %d\n", w.ID, task.MapID)
+	w.sendHeartbeat()
 
 	// 加载Map函数
 	mapPlugin, err := plugin.Open(task.FucPath)
@@ -152,6 +154,8 @@ func (w *Worker) doMap(task Task) {
 
 	// 如果有 Combine 函数，则对中间结果进行合并
 	if task.CombinePath != "" {
+		w.sendHeartbeat()
+
 		// 加载Combine函数
 		combinePlugin, err := plugin.Open(task.CombinePath)
 		if err != nil {
@@ -162,6 +166,9 @@ func (w *Worker) doMap(task Task) {
 			log.Fatalf("无法查找Combine函数: %v", err)
 		}
 		combineFunc := *(combineSymbol.(*Combine))
+		w.CombineFunc = combineFunc
+		fmt.Printf("Worker %s 使用Combine函数进行中间结果合并\n", w.ID)
+
 		// 对每个 Reduce 任务的中间结果进行合并
 		for i := 0; i < task.NReduce; i++ {
 			// 将 []KeyValue 转换为 []*Pair
@@ -173,7 +180,7 @@ func (w *Worker) doMap(task Task) {
 				})
 			}
 			// 使用 Combine 函数对中间结果进行合并
-			combined := combineFunc(pairs)
+			combined := w.CombineFunc(pairs)
 			// 将合并后的结果重新赋值给 intermediate[i]
 			intermediate[i] = make([]KeyValue, 0, len(combined)) // 重新分配切片空间
 			for _, kv := range combined {
@@ -224,6 +231,7 @@ func (w *Worker) doMap(task Task) {
 // 执行Reduce任务
 func (w *Worker) doReduce(task Task) {
 	fmt.Printf("Worker %s 开始执行Reduce任务 %d\n", w.ID, task.ReduceID)
+	w.sendHeartbeat()
 
 	// 加载Reduce函数
 	reducePlugin, err := plugin.Open(task.FucPath)

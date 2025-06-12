@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"sync"
 	"syscall"
@@ -29,10 +28,6 @@ func StartMapReduce() {
 
 	if err := runMapReduce(); err != nil {
 		log.Fatalf("运行MapReduce失败: %v", err)
-	}
-
-	if err := mergeOutput(); err != nil {
-		log.Fatalf("合并输出结果失败: %v", err)
 	}
 
 	log.Println("MapReduce任务已完成！结果保存在 Data/output/output.txt 文件中。")
@@ -181,38 +176,6 @@ func InputData(MapPath string, ReducePath string, CombinePath string, data strin
 
 }
 
-// 合并输出结果
-func mergeOutput() error {
-	log.Println("合并Reduce输出...")
-
-	// 获取所有mr-out文件
-	matches, err := filepath.Glob("Data/mr-out/mr-out-*") // match：文件路径的切片
-	if err != nil {
-		return fmt.Errorf("查找输出文件失败: %v", err)
-	}
-
-	// 打开输出文件
-	outFile, err := os.Create("Data/output/output.txt")
-	if err != nil {
-		return fmt.Errorf("创建输出文件失败: %v", err)
-	}
-	defer outFile.Close()
-
-	// 合并所有中间输出
-	for _, file := range matches {
-		data, err := os.ReadFile(file)
-		if err != nil {
-			return fmt.Errorf("读取文件 %s 失败: %v", file, err)
-		}
-
-		if _, err := outFile.Write(data); err != nil {
-			return fmt.Errorf("写入合并输出失败: %v", err)
-		}
-	}
-
-	return nil
-}
-
 // 进程管理
 var (
 	processes      = make(map[int]*os.Process) // 进程ID到进程对象的映射
@@ -271,8 +234,8 @@ func main() {
 		StartMapReduce() // 启动 MapReduce 分布式计算框架
 	}
 	if *mode == "InputDir" {
-		if *MapPath == "" || *ReducePath == "" || *CombinePath == "" || *data == "" {
-			log.Fatal("请指定 MapPath、ReducePath、CombinePath 和 data 参数")
+		if *MapPath == "" || *ReducePath == "" || *data == "" {
+			log.Fatal("请指定 MapPath、ReducePath 和 data 参数")
 		} else {
 			log.Println("开始设置输入数据...")
 			if err := InputData(*MapPath, *ReducePath, *CombinePath, *data); err != nil {
